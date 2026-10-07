@@ -1,5 +1,5 @@
 {
-  "name": "100x",
+  "name": "exec-coding-harness",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -21,6 +21,6 @@
     "typescript": "^7.0.2"
   },
   "bin": {
-    "mypi": "./bin/mypi.js"
+    "exec-code": "./bin/exec-code.js"
   }
 }
