@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk"
 import { parseArgs } from "node:util";
 import OpenAI from "openai"
+import { getProvider } from "./providers/index.ts";
+import { Message } from "./types.ts";
 // load the .env next to the code, so exec-code works from any folder
 config({ path: fileURLToPath(new URL("../.env", import.meta.url)), quiet: true });
 const anthropicClient = new Anthropic()
@@ -19,6 +21,10 @@ const { values } = parseArgs({
             type: "string",
             short: "p",
         },
+        provider: {
+            type: "string",
+            default: "openrouter"
+        },
         model: {
             type: "string",
             default: "nvidia/nemotron-3.5-super-vl:free"
@@ -28,22 +34,24 @@ const { values } = parseArgs({
 
 if (!values.prompt) {
     console.error("Please provide a prompt using --prompt or -p");
-    process.exit(0);
+    process.exit(1);
 }
 
-const response = await xaiClient.responses.create({
-    model: values.model,
-    max_output_tokens: 250000,
-    reasoning: { "effort": "low" },
-    stream: true,
-    input: values.prompt,
-});
+const provider = getProvider(values.provider);
+const model = provider.defaultModel;
+const messages: Message[] = [{ role: "user", content: values.prompt }];
 
 
-for await (const event of response) {
-    // you can run `exec-code -p "your prompt"`. You will get to see how the response is streamed back to you in real-time, with each event being logged to the console.
-    // @ts-ignore
-    console.log(`${event.sequence_number} -> ${event.type}:   ${event.delta ?? ""}`);
+for await (const event of provider.stream({ messages, model })) {
+
+    if (event.type == "text_delta") {
+        console.log(`[${event.type}] ${event?.delta ?? ""}`)
+    } else {
+        const { usage, stopReason } = event.message;
+
+        console.log(`\n\n ${provider.name} with model ${model} finished with stop reason: ${stopReason}, usage: input=${usage.input}, output=${usage.output}`)
+    }
 }
+
 
 // const finalMessage = response.st
