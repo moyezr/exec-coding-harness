@@ -42,6 +42,7 @@ const response = await xaiClient.responses.create({
 
 for await (const event of response) {
     // you can run `exec-code -p "your prompt"`. You will get to see how the response is streamed back to you in real-time, with each event being logged to the console.
+    // @ts-ignore
     console.log(`${event.sequence_number} -> ${event.type}:   ${event.delta ?? ""}`);
 }
 
