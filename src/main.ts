@@ -32,13 +32,15 @@ const { values } = parseArgs({
     }
 })
 
+console.log(`Using provider: ${values.provider}, model: ${values.model}`)
+
 if (!values.prompt) {
     console.error("Please provide a prompt using --prompt or -p");
     process.exit(1);
 }
 
-const provider = getProvider(values.provider);
-const model = provider.defaultModel;
+const provider = getProvider(values.provider,);
+const model = values.model ?? provider.defaultModel;
 const messages: Message[] = [{ role: "user", content: values.prompt }];
 
 
