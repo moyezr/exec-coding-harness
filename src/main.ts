@@ -4,9 +4,13 @@ import Anthropic from "@anthropic-ai/sdk"
 import { parseArgs } from "node:util";
 import OpenAI from "openai"
 import { getProvider } from "./providers/index.ts";
-import { Message } from "./types.ts";
+import { AssistantMessage, Message } from "./types.ts";
+import { readTool } from "./tools/read.ts";
 // load the .env next to the code, so exec-code works from any folder
 config({ path: fileURLToPath(new URL("../.env", import.meta.url)), quiet: true });
+
+
+
 const anthropicClient = new Anthropic()
 
 const xaiClient = new OpenAI({
@@ -27,7 +31,8 @@ const { values } = parseArgs({
         },
         model: {
             type: "string",
-            default: "nvidia/nemotron-3.5-super-vl:free"
+            // default: "nvidia/nemotron-3.5-super-vl:free",
+            default: "openai/gpt-6-luna"
         }
     }
 })
@@ -42,18 +47,40 @@ if (!values.prompt) {
 const provider = getProvider(values.provider,);
 const model = values.model ?? provider.defaultModel;
 const messages: Message[] = [{ role: "user", content: values.prompt }];
+const tools = [readTool]
 
 
-for await (const event of provider.stream({ messages, model })) {
+async function callModel(): Promise<AssistantMessage> {
+    for await (const event of provider.stream({ messages, model, tools })) {
+        if (event.type == "text_delta") {
+            console.log(`[${event.type}] ${event?.delta ?? ""}`)
+        } else {
+            const { usage, stopReason } = event.message;
 
-    if (event.type == "text_delta") {
-        console.log(`[${event.type}] ${event?.delta ?? ""}`)
-    } else {
-        const { usage, stopReason } = event.message;
-
-        console.log(`\n\n ${provider.name} with model ${model} finished with stop reason: ${stopReason}, usage: input=${usage.input}, output=${usage.output}`)
+            console.log(`\n\n ${provider.name} with model ${model} finished with stop reason: ${stopReason}, usage: input=${usage.input}, output=${usage.output}`)
+            return event.message;
+        }
     }
+
+    throw new Error("Stream ended without a final message");
+
 }
 
+
+const first = await callModel()
+messages.push(first)
+console.log(`##### ${first.stopReason}`)
+
+
+if (first.stopReason === "toolUse") {
+    for (const block of first.content) {
+        if (block.type !== "toolCall") continue;
+        console.log(`-> ${block.name}(${JSON.stringify(block.arguments)})`);
+        const result = await readTool.execute(block.arguments);
+        messages.push({ role: "toolResult", toolCallId: block.id, toolName: block.name, content: result, isError: false });
+    }
+    // round 2: the model sees the tool result and answers
+    messages.push(await callModel());
+}
 
 // const finalMessage = response.st
