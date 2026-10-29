@@ -19,6 +19,8 @@ const xaiClient = new OpenAI({
 });
 
 
+const systemPrompt = `You're a helpful coding assistant.`
+
 const { values } = parseArgs({
     options: {
         prompt: {
@@ -50,21 +52,24 @@ const messages: Message[] = [{ role: "user", content: values.prompt }];
 
 
 await runAgent({
-    provider, model, tools, messages, onEvent(event) {
-        if (event.type === "text") {
-            console.log(`[${event.type}] ${event.delta}`)
-        } else if (event.type === "tool_start") {
-            console.log(`[${event.type}] ${event.call.name}(${JSON.stringify(event.call.arguments)})`)
-        } else if (event.type === "tool_end") {
-            const lines = event?.result?.split("\n").length;
-            console.log(`\n ${event?.isError ? event.result : lines}`)
-        } else if (event.type == "turn_end") {
+    provider,
+    model,
+    tools,
+    messages,
+    onEvent(event) {
+        if (event.type === "text") process.stdout.write(event.delta);
+        else if (event.type == "tool_start") console.log(`\n ${event.call.name}`);
+        else if (event.type == "tool_end") {
+            const lines = event.result.split("\n").length;
+            console.log(`\n ${event.isError ? event.result : lines}`);
+        } else if (event.type === "turn_end") {
             const { usage, stopReason } = event.message;
-            console.log(`\n\n ${provider.name} with model ${model} finished with stop reason: ${stopReason}, usage: input=${usage.input}, output=${usage.output}`)
+            console.log(
+                `\n\n  ${provider.name} ... ${model} ... ${usage.input} ... ${usage.output} ... ${stopReason}`,
+            );
         }
-    }
-})
-
+    },
+});
 
 // async function callModel(): Promise<AssistantMessage> {
 //     for await (const event of provider.stream({ messages, model, tools })) {
