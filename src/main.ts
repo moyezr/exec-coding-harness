@@ -8,8 +8,8 @@ import { AssistantMessage, Message } from "./types.ts";
 import { readTool } from "./tools/read.ts";
 // load the .env next to the code, so exec-code works from any folder
 config({ path: fileURLToPath(new URL("../.env", import.meta.url)), quiet: true });
-
-
+import { tools } from "./tools/index.ts"
+import { runAgent } from "./agent/loop.ts";
 
 const anthropicClient = new Anthropic()
 
@@ -47,40 +47,56 @@ if (!values.prompt) {
 const provider = getProvider(values.provider,);
 const model = values.model ?? provider.defaultModel;
 const messages: Message[] = [{ role: "user", content: values.prompt }];
-const tools = [readTool]
 
 
-async function callModel(): Promise<AssistantMessage> {
-    for await (const event of provider.stream({ messages, model, tools })) {
-        if (event.type == "text_delta") {
-            console.log(`[${event.type}] ${event?.delta ?? ""}`)
-        } else {
+await runAgent({
+    provider, model, tools, messages, onEvent(event) {
+        if (event.type === "text") {
+            console.log(`[${event.type}] ${event.delta}`)
+        } else if (event.type === "tool_start") {
+            console.log(`[${event.type}] ${event.call.name}(${JSON.stringify(event.call.arguments)})`)
+        } else if (event.type === "tool_end") {
+            const lines = event?.result?.split("\n").length;
+            console.log(`\n ${event?.isError ? event.result : lines}`)
+        } else if (event.type == "turn_end") {
             const { usage, stopReason } = event.message;
-
             console.log(`\n\n ${provider.name} with model ${model} finished with stop reason: ${stopReason}, usage: input=${usage.input}, output=${usage.output}`)
-            return event.message;
         }
     }
-
-    throw new Error("Stream ended without a final message");
-
-}
+})
 
 
-const first = await callModel()
-messages.push(first)
-console.log(`##### ${first.stopReason}`)
+// async function callModel(): Promise<AssistantMessage> {
+//     for await (const event of provider.stream({ messages, model, tools })) {
+//         if (event.type == "text_delta") {
+//             console.log(`[${event.type}] ${event?.delta ?? ""}`)
+//         } else {
+//             const { usage, stopReason } = event.message;
+
+//             console.log(`\n\n ${provider.name} with model ${model} finished with stop reason: ${stopReason}, usage: input=${usage.input}, output=${usage.output}`)
+//             return event.message;
+//         }
+//     }
+
+//     throw new Error("Stream ended without a final message");
+
+// }
 
 
-if (first.stopReason === "toolUse") {
-    for (const block of first.content) {
-        if (block.type !== "toolCall") continue;
-        console.log(`-> ${block.name}(${JSON.stringify(block.arguments)})`);
-        const result = await readTool.execute(block.arguments);
-        messages.push({ role: "toolResult", toolCallId: block.id, toolName: block.name, content: result, isError: false });
-    }
-    // round 2: the model sees the tool result and answers
-    messages.push(await callModel());
-}
+// const first = await callModel()
+// messages.push(first)
+// console.log(`##### ${first.stopReason}`)
+
+
+// if (first.stopReason === "toolUse") {
+//     for (const block of first.content) {
+//         if (block.type !== "toolCall") continue;
+//         console.log(`-> ${block.name}(${JSON.stringify(block.arguments)})`);
+//         const result = await readTool.execute(block.arguments);
+//         messages.push({ role: "toolResult", toolCallId: block.id, toolName: block.name, content: result, isError: false });
+//     }
+//     // round 2: the model sees the tool result and answers
+//     messages.push(await callModel());
+// }
 
 // const finalMessage = response.st
