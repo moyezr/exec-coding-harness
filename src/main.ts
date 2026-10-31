@@ -1,22 +1,13 @@
 import { config } from "dotenv";
 import { fileURLToPath } from "node:url";
-import Anthropic from "@anthropic-ai/sdk"
 import { parseArgs } from "node:util";
-import OpenAI from "openai"
+
 import { getProvider } from "./providers/index.ts";
-import { AssistantMessage, Message } from "./types.ts";
-import { readTool } from "./tools/read.ts";
+import { Message } from "./types.ts";
 // load the .env next to the code, so exec-code works from any folder
 config({ path: fileURLToPath(new URL("../.env", import.meta.url)), quiet: true });
 import { tools } from "./tools/index.ts"
 import { runAgent } from "./agent/loop.ts";
-
-const anthropicClient = new Anthropic()
-
-const xaiClient = new OpenAI({
-    apiKey: process.env.OPENROUTER_API_KEY,
-    baseURL: "https://openrouter.ai/api/v1",
-});
 
 
 const systemPrompt = `You're a helpful coding assistant.`
@@ -33,8 +24,8 @@ const { values } = parseArgs({
         },
         model: {
             type: "string",
-            // default: "nvidia/nemotron-3.5-super-vl:free",
-            default: "openai/gpt-6-luna"
+            default: "nvidia/nemotron-3.5-super-vl:free",
+            // default: "openai/gpt-6-luna"
         }
     }
 })
